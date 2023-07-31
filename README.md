@@ -49,7 +49,6 @@ The directory debug_RustyLoader contains a verbose version of the RustyLoader.
 It works in a slightly different way :
 
 	- It it an exe, not a dll. 
-    
 	- It operates as an injector and also a loader.
 	- It reads the dll named debug_dll.dll in /dll_to_inject .
 	- It loads the raw dll in the self process memory and perfoms all the loading operations as RustyLoader would do but with verbose printed logs. Once loaded, it calls dllmain.
