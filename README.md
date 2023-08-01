@@ -38,10 +38,23 @@ $process.Id
 ```
 
 Inject the dll :
+
+Usage :
 ```
-.\inject.exe <pid>
+.\inject.exe 
+  -local string
+        Local file path
+  -pid int
+        Process ID
+  -url string
+        URL of the file
 ```
-![Alt text](/assets/injected.png)
+
+Example
+```
+.\inject.exe -pid  21108 -url http://127.0.0.1:8080/rusty_inject.dll
+```
+![Alt text](/assets/injected2.png)
 
 # How to use the debug version ?
 
