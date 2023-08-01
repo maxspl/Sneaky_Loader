@@ -2,31 +2,68 @@ package main
 
 import (
 	"GogoInjector/inject"
+	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"unsafe"
 )
 
-var dll_path = "rusty_inject.dll" //"acledit.dll"
+//var dll_path = "rusty_inject.dll"
 
 func main() {
 
-	if len(os.Args) < 2 {
-		fmt.Println("No argument provided")
-		return
-	} else {
-		PID, err := strconv.Atoi(os.Args[1])
+	// Define the command-line options.
+	pidPtr := flag.Int("pid", 0, "Process ID")
+	localPtr := flag.String("local", "", "Local file path")
+	urlPtr := flag.String("url", "", "URL of the file")
+
+	// Parse the command-line options.
+	flag.Parse()
+
+	// Dereference the pointers
+	pid := *pidPtr
+	local := *localPtr
+	url := *urlPtr
+	dwPID := *(*uint32)(unsafe.Pointer(&pid))
+	fmt.Printf("dwPID :%v\n", dwPID)
+
+	if pid == 0 {
+		// Check if PID is provided
+		fmt.Println("PID is required.")
+		os.Exit(1)
+	}
+
+	if local != "" && url != "" {
+		// If both local and url are provided
+		fmt.Println("Please provide either local file path or url, not both.")
+		os.Exit(1)
+	}
+
+	if local == "" && url == "" {
+		// If neither local nor url are provided
+		fmt.Println("Please provide either local file path or url.")
+		os.Exit(1)
+	}
+
+	fmt.Println("PID:", pid)
+
+	if local != "" {
+		// Handle the --local option.
+		fmt.Println("Local path:", local)
+		loading_type := "disk"
+
+		// Run injection with local path
+		err := inject.Mainfunc(dwPID, local, loading_type)
 		if err != nil {
-			fmt.Println("PID must be an int.")
+			fmt.Println("Error :", err)
 			return
 		}
-		fmt.Println("Process ID to inject :", PID)
+	} else if url != "" {
+		// Handle the --url option.
+		loading_type := "url"
 
-		dwPID := *(*uint32)(unsafe.Pointer(&PID))
-		fmt.Printf("dwPID :%T\n", dwPID)
-
-		err = inject.Mainfunc(dwPID, dll_path)
+		//Run injection with url
+		err := inject.Mainfunc(dwPID, url, loading_type)
 		if err != nil {
 			fmt.Println("Error :", err)
 			return
