@@ -1,4 +1,4 @@
-# GoRust_Sneaky_Syringe
+# Sneaky_Loader
 Custom loader - Rust/Go Dll Reflective Injection - Only supports 32bits for the moment
 
 # How to use it ?
