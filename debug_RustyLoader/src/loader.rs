@@ -181,14 +181,20 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             println!("module_nt_headers_ptr {:x}",module_nt_headers_ptr);
 
             // module_export_dir 
-            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32;
+            // module_export_dir 
+            #[cfg(target_pointer_width = "32")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32; //32bits_spec
+
+            #[cfg(target_pointer_width = "64")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS64 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS64; //64bits_spec - line add
+            
             let module_export_dir =  (*module_nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT as usize];
 
             // get the VA of the export directory
             let module_image_data_directory:  usize = module_base_address as  usize + module_export_dir.VirtualAddress as usize;
-            let module_image_data_directory2:  u32 =  module_export_dir.VirtualAddress as u32;
-            println!("module_image_data_directory {:x}",module_image_data_directory2);
-
+            let module_image_data_directory2:  usize =  module_export_dir.VirtualAddress as usize; //32bits_spec - line mode
+            println!("MSP module_image_data_directory {:x}",module_image_data_directory2);
+            
             // get the VA for the array of name pointers
             let module_image_export_directory : *mut IMAGE_EXPORT_DIRECTORY = module_image_data_directory as *mut IMAGE_EXPORT_DIRECTORY;
             let mut module_AddressOfNames: *const usize = (module_base_address as usize + (*module_image_export_directory).AddressOfNames as usize) as *const usize;
@@ -200,19 +206,20 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             //     let name_addr = (module_base_address as usize + names[i as usize] as usize) as *const i8;
             // }\
             let mut count = 0;
+            
             while counter != 3{
                 // get AddressOfNames value (RVA to function names array)
-                let module_AddressOfNames_dereferenced: u32 = *(module_AddressOfNames as *const u32) ;
+                let module_AddressOfNames_dereferenced: u32 = *(module_AddressOfNames as *const u32) ; //32bits_spec - line mode
                 
                 // get offset of AddressOfNames value
                 let function_name_ptr = module_base_address as usize + module_AddressOfNames_dereferenced as usize;
-
+                
                 //get slice of u8 from each function name
                 let mut function_name_slice = grab_str_from_ptr(function_name_ptr);
-
+                
                 // get hash value of the function name
                 let function_name_hash: u32 = dbj2_hash(function_name_slice);
-
+                
                 if function_name_hash == GET_PROC_ADDRESS_HASH || function_name_hash == LOAD_LIBRARY_A_HASH || function_name_hash == VIRTUAL_ALLOC_HASH {
                     counter += 1;
                     match std::str::from_utf8(function_name_slice) {
@@ -224,16 +231,30 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
                     }
                     // get the VA for the array of addresses
-                    let mut AddressOfFunctions: *const u32  = (module_base_address as usize + (*module_image_export_directory).AddressOfFunctions as usize) as *const u32;
+                    let mut AddressOfFunctions: *const u32  = (module_base_address as usize + (*module_image_export_directory).AddressOfFunctions as usize) as *const u32;  //32bits_spec - line mode
 
                     // use this functions name ordinal as an index into the array of name pointers
                     let ordinal_value = *(module_AddressOfOrdinals as *const u16) as isize;
-                    AddressOfFunctions = (AddressOfFunctions as *const u32).offset(ordinal_value) as *const u32;
-                    println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32));
-                    
-                    // get function VA
-                    let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize;
+                    AddressOfFunctions = (AddressOfFunctions as *const u32).offset(ordinal_value) as *const u32;//32bits_spec - line mode
 
+
+
+
+
+                    
+                    #[cfg(target_pointer_width = "32")]
+                    println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32)); //32bits_spec - line add
+
+                    #[cfg(target_pointer_width = "64")]
+                    println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32)); //64bits_spec - line add
+
+                    // get function VA
+                    #[cfg(target_pointer_width = "32")]
+                    let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize; //32bits_spec - line add
+
+                    #[cfg(target_pointer_width = "64")]
+                    let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize; //64bits_spec - line add
+                    
                     // store this functions VA
                     if function_name_hash == LOAD_LIBRARY_A_HASH {
                         //let LoadLibraryA = transmute::<_, fnLoadLibraryA>(AddressOfFunctions_VA);
@@ -244,6 +265,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                         //let GetProcAddress: *mut fnGetProcAddress = AddressOfFunctions_VA as *mut fnGetProcAddress;
                         GetProcAddress = transmute::<_, fnGetProcAddress>(AddressOfFunctions_VA);
                     }
+                    
                     if function_name_hash == VIRTUAL_ALLOC_HASH {
                         //VirtualAlloc = AddressOfFunctions_VA as *mut fnVirtualAlloc;
                         VirtualAlloc = transmute::<_, fnVirtualAlloc>(AddressOfFunctions_VA);
@@ -251,7 +273,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                         
 
                     }
- 
+                    
                 }
 
                 
@@ -259,11 +281,11 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                 // offset function offsets the pointer by the size of the type the pointer is pointing to
                 // module_AddressOfNames = module_AddressOfNames.offset(1); //add dword
                 module_AddressOfNames = (module_AddressOfNames as *const u16).offset(2) as *const usize; // add 2x u16 = DWORD
-
+                
                 // get the next exported function name ordinal
                 module_AddressOfOrdinals = (module_AddressOfOrdinals as *const u16).offset(1) as *const u16; // add 1x u16 = WORD
                 count += 1;
-
+                
             }
             
         }
@@ -283,17 +305,23 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             println!("module_nt_headers_ptr {:x}",module_nt_headers_ptr);
 
             // module_export_dir 
-            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32;
+            #[cfg(target_pointer_width = "32")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS64 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS64; //32bits_spec - line add
+
             let module_export_dir =  (*module_nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT as usize];
 
             // get the VA of the export directory
             let module_image_data_directory:  usize = module_base_address as  usize + module_export_dir.VirtualAddress as usize;
-            let module_image_data_directory2:  u32 =  module_export_dir.VirtualAddress as u32;
-            println!("module_image_data_directory {:x}",module_image_data_directory2);
+            let module_image_data_directory2:  usize =  module_export_dir.VirtualAddress as usize; //32bits_spec - line mode
+            println!("MSP module_image_data_directory 0x{:x}",module_image_data_directory2);
 
             // get the VA for the array of name pointers
             let module_image_export_directory : *mut IMAGE_EXPORT_DIRECTORY = module_image_data_directory as *mut IMAGE_EXPORT_DIRECTORY;
             let mut module_AddressOfNames: *const usize = (module_base_address as usize + (*module_image_export_directory).AddressOfNames as usize) as *const usize;
+            println!("MSP AddressOfNames 0x{:x}",(*module_image_export_directory).AddressOfNames);
             
             // get the VA for the array of name ordinals
             let mut module_AddressOfOrdinals: *const u16 = (module_base_address as usize + (*module_image_export_directory).AddressOfNameOrdinals as usize) as *const u16;
@@ -304,7 +332,12 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             let mut count = 0;
             while counter != 1{
                 // get AddressOfNames value (RVA to function names array)
-                let module_AddressOfNames_dereferenced: u32 = *(module_AddressOfNames as *const u32) ;
+                let module_AddressOfNames_dereferenced: u32 = *(module_AddressOfNames as *const u32) ; //32bits_spec - line mode
+                //let module_AddressOfNames_dereferenced  = read(module_AddressOfNames as *mut usize);
+                println!("module_AddressOfNames_dereferenced : {:x}",module_AddressOfNames_dereferenced);
+                // loop {
+                //     let a = 61;
+                // }
                 // get offset of AddressOfNames value
                 let function_name_ptr = module_base_address as usize + module_AddressOfNames_dereferenced as usize;
 
@@ -325,15 +358,15 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                         Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
                     }
                     // get the VA for the array of addresses
-                    let mut AddressOfFunctions: *const u32  = (module_base_address as usize + (*module_image_export_directory).AddressOfFunctions as usize) as *const u32;
+                    let mut AddressOfFunctions: *const u32  = (module_base_address as usize + (*module_image_export_directory).AddressOfFunctions as usize) as *const u32; //32bits_spec - line mode
 
                     // use this functions name ordinal as an index into the array of name pointers
                     let ordinal_value = *(module_AddressOfOrdinals as *const u16) as isize;
-                    AddressOfFunctions = (AddressOfFunctions as *const u32).offset(ordinal_value) as *const u32;
-                    println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32));
-                    
+                    AddressOfFunctions = (AddressOfFunctions as *const u32).offset(ordinal_value) as *const u32; //32bits_spec - line mode
+                    println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32)); //32bits_spec - line mode
+
                     // get function VA
-                    let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize;
+                    let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize; //32bits_spec - line mode
                     // store this functions VA
                     if function_name_hash == FLUSH_INSTRUCTION_CACHE_HASH {
                         //let FlushInstructionCache: *mut fnFlushInstructionCache = AddressOfFunctions_VA as *mut fnFlushInstructionCache;
@@ -367,13 +400,22 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
     // get the VA of the NT Header for the PE to be loaded
     let loaded_module_DOS_Headers: *mut IMAGE_DOS_HEADER = loaded_module_base as *mut IMAGE_DOS_HEADER;
     let NT_Headers_address = loaded_module_base as usize + (*loaded_module_DOS_Headers).e_lfanew as usize;
-    let loaded_module_NT_Headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32;
+
+    #[cfg(target_pointer_width = "32")]
+    let loaded_module_NT_Headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+    #[cfg(target_pointer_width = "64")]
+    let loaded_module_NT_Headers: *mut IMAGE_NT_HEADERS64 = NT_Headers_address as *mut IMAGE_NT_HEADERS64; //64bits_spec - line add
 
     //println!("Magic {:x}",(*loaded_module_NT_Headers).OptionalHeader.Magic);
-
+    
+    println!("MSP ici");
 	// allocate all the memory for the DLL to be loaded into. we can load at any address because we will  
 	// relocate the image. Also zeros all memory and marks it as READ, WRITE and EXECUTE to avoid any problems.
+    println!("SizeOfImage : {:x}",(*loaded_module_NT_Headers).OptionalHeader.SizeOfImage as usize);
+
     let mut new_base_address = VirtualAlloc(null_mut(), (*loaded_module_NT_Headers).OptionalHeader.SizeOfImage as usize, MEM_RESERVE|MEM_COMMIT, PAGE_EXECUTE_READWRITE );
+
     println!("new_base_address : {:?}",new_base_address);
 
     // step 2 : copy the headers
@@ -394,7 +436,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
     // get the VA of the first section header
     let optional_headers_ptr = &(*loaded_module_NT_Headers).OptionalHeader as *const _ as usize; // get a pointer to OptionalHeader
     let mut first_section: *mut c_void = (optional_headers_ptr as  usize + (*loaded_module_NT_Headers).FileHeader.SizeOfOptionalHeader as usize) as *mut c_void;
-    println!("first_section {:x}",*(first_section as *mut u32));
+    println!("first_section {:x}",*(first_section as *mut usize)); //32bits_spec - line mode
 
     // itterate through all sections, loading them into memory.
     let mut number_of_sections =  (*loaded_module_NT_Headers).FileHeader.NumberOfSections;
@@ -412,7 +454,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 
         // get a ptr the section data
         let mut section_data = (loaded_module_base as usize + (*section_headers).PointerToRawData as usize) as *mut usize;
-        println!("section_data : 0x{:x}",*(section_data as *mut u32));
+        println!("section_data : 0x{:x}",*(section_data as *mut usize)); //32bits_spec - line mode
 
         // get the section data size
         let mut section_data_size = (*section_headers).SizeOfRawData;
@@ -438,7 +480,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 
     // get pointer to the address of the import directory
     let import_dir_addr: usize =  &(*loaded_module_NT_Headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT as usize] as *const _ as usize;;
-    println!("import_dir : {:x}",*(import_dir_addr as *mut u32));
+    println!("import_dir : {:x}",*(import_dir_addr as *mut usize)); //32bits_spec - line mode
     
     // We read the import dir RVA of the import dir from the raw (not loaded) dll header and we add it to the new base address
     let directory_import : *mut IMAGE_DATA_DIRECTORY = import_dir_addr as *mut IMAGE_DATA_DIRECTORY; 
@@ -446,7 +488,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 
     // address of first Import Dir entry
     let first_entry = (new_base_address as *mut u8).add((*directory_import).VirtualAddress as usize);
-    println!("first_entry : {:x}",*(first_entry as *mut u32));
+    println!("first_entry : {:x}",*(first_entry as *mut usize)); //32bits_spec - line mode
                 
     // cast first import dir entry
     let mut first_entry_DESCRIPTOR : *mut IMAGE_IMPORT_DESCRIPTOR = first_entry as *mut IMAGE_IMPORT_DESCRIPTOR; 
@@ -479,28 +521,42 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
         
         // iterate through all imported functions
         // thunk contains address of the IAT entry containing the function RVA
-        while *(FirstThunk_ptr as *mut u32) != 0 {
-            
+        while *(FirstThunk_ptr as *mut usize) != 0 { //32bits_spec - line mode
 
             // Just check if is working
-            println!("\nFirstThunk : {:x}",*(FirstThunk_ptr as *mut u32)); // print "Thunk value"
+            println!("\nFirstThunk : {:x}",*(FirstThunk_ptr as *mut usize)); // print "Thunk value" //32bits_spec - line mode
             // if *(FirstThunk_ptr as *mut u32) == 0x1ca20 {
             //     loop {
             //         let a = 61;
             //     }
             // }
             // sanity check OriginalFirstThunk as some compilers only import by FirstThunk. Will enter the if condition it import by ordinal
-            let mut imagethunkdata : *mut IMAGE_THUNK_DATA32 = OriginalFirstThunk as * mut IMAGE_THUNK_DATA32; 
+            #[cfg(target_pointer_width = "32")]
+            let mut imagethunkdata : *mut IMAGE_THUNK_DATA32 = OriginalFirstThunk as * mut IMAGE_THUNK_DATA32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let mut imagethunkdata : *mut IMAGE_THUNK_DATA64 = OriginalFirstThunk as * mut IMAGE_THUNK_DATA64; //64bits_spec - line add
+
             println!("Ordinal : {:x}",(*imagethunkdata).u1.Ordinal);
-            
-                        
-            if !OriginalFirstThunk.is_null()  && (IMAGE_ORDINAL_FLAG32 & (*imagethunkdata).u1.Ordinal) != 0{ //IMAGE_ORDINAL_FLAG64 equal to 0x8000000000000000
+
+            #[cfg(target_pointer_width = "32")]
+            let IMAGE_ORDINAL_X = IMAGE_ORDINAL_FLAG32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let IMAGE_ORDINAL_X = IMAGE_ORDINAL_FLAG64; //64bits_spec - line add
+
+            if !OriginalFirstThunk.is_null()  && (IMAGE_ORDINAL_X & (*imagethunkdata).u1.Ordinal) != 0{ //IMAGE_ORDINAL_FLAG64 equal to 0x8000000000000000  - 32bits_spec - line mode
                 
                 // get the VA of the modules NT Header
                 let mut NT_Headers_address = loaded_module_base as usize + (*loaded_module_DOS_Headers).e_lfanew as usize;
             
                 // get the address of the modules export directory entry
-                let mut module_nt_headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32;
+                #[cfg(target_pointer_width = "32")]
+                let mut module_nt_headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+                #[cfg(target_pointer_width = "64")]
+                let mut module_nt_headers: *mut IMAGE_NT_HEADERS64 = NT_Headers_address as *mut IMAGE_NT_HEADERS64; //64bits_spec - line add
+
                 let mut export_dir_entry_ptr =  (*module_nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT as usize];
 
                 // get the VA of the export directory
@@ -515,11 +571,11 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                 //array_address = array_address + (IMAGE_ORDINAL((*imagethunkdata).u1.Ordinal) as usize - (*module_image_export_directory).Base as usize* 4) as usize;
                 array_address = array_address + (  ((*imagethunkdata).u1.Ordinal & 0xFFF) as usize - (*module_image_export_directory).Base as usize* 4) as usize;
                 // // patch in the address for this imported function
-                *(FirstThunk_ptr as *mut u32)  = (loaded_module_base as  usize + *(array_address as *mut u32) as  usize) as  u32;
+                *(FirstThunk_ptr as *mut usize)  = (loaded_module_base as  usize + *(array_address as *mut usize) as  usize) as  usize; //32bits_spec - line mode
             }
             else {
                 // get the VA of this functions import by name struct
-                let mut function_import_VA = (new_base_address as *mut u8).add((*(FirstThunk_ptr as *mut u32)) as usize);
+                let mut function_import_VA = (new_base_address as *mut u8).add((*(FirstThunk_ptr as *mut usize)) as usize); //32bits_spec - line mode
                 println!("function_import_VA : {:p}",function_import_VA);
 
                 // cast function_import_VA to IMAGE_IMPORT_BY_NAME struct
@@ -540,10 +596,10 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                 *(FirstThunk_ptr as *mut usize) = function_VA  ;
 
                 //Check if the IAT is patched and match the function_VA returned by GetProcAddress
-                println!("FirstThunk patched : {:x}", *(FirstThunk_ptr as *mut u32));
+                println!("FirstThunk patched : {:x}", *(FirstThunk_ptr as *mut usize)); //32bits_spec - line mode
             }
             // get next pointer
-            FirstThunk_ptr = (FirstThunk_ptr as *mut u32).add(1) as *mut usize;
+            FirstThunk_ptr = (FirstThunk_ptr as *mut usize).add(1) as *mut usize; //32bits_spec - line mode
         }
       
 
@@ -558,7 +614,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 
     // calculate the base address delta and perform relocations (even if we load at desired image base)
     println!("\nnew_base_address :{:p}",new_base_address);
-    println!("ImageBase :{:x}",(*loaded_module_NT_Headers).OptionalHeader.ImageBase);
+    //println!("ImageBase :{:x}",(*loaded_module_NT_Headers).OptionalHeader.ImageBase); // MSP mod
     let base_address_delta = (new_base_address  as isize - (*loaded_module_NT_Headers).OptionalHeader.ImageBase as isize);
 
     // get the address of the relocation directory
@@ -594,7 +650,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             // get the first entry in the current relocation block
             //let first_entry_in_block: *mut usize = first_entry.add(size_of::<IMAGE_BASE_RELOCATION>()) as *mut usize; // IMAGE_BASE_RELOCATION size should be 8
             let first_entry_in_block: *const u16 = first_entry.add(size_of::<IMAGE_BASE_RELOCATION>()) as *const u16; // IMAGE_BASE_RELOCATION size should be 8
-            println!("first_entry_in_block : {:x}",(*first_entry_in_block) as u32);
+            println!("first_entry_in_block : {:x}",(*first_entry_in_block) as usize); //32bits_spec - line mode
             
             // we itterate through all the entries in the current block...
             
@@ -603,7 +659,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 				// perform the relocation, skipping IMAGE_REL_BASED_ABSOLUTE as required.
 				// we dont use a switch statement to avoid the compiler building a jump table
 				// which would not be very position independent!
-                let type_field: u32 = (first_entry_in_block.offset(i as isize).read() >> 12) as u32;
+                let type_field: u32 = (first_entry_in_block.offset(i as isize).read() >> 12) as u32; //32bits_to_mode maybe
                 let offset = first_entry_in_block.offset(i as isize).read() & 0xFFF;
                 if type_field == IMAGE_REL_BASED_DIR64 || type_field == IMAGE_REL_BASED_HIGHLOW {
                     //*((relocation_block_VA + offset as isize) as *mut isize) += base_address_delta;

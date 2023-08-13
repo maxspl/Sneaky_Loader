@@ -7,7 +7,12 @@ mod loader;
 fn main() {
 
     loader::hello_from_lib();
+    #[cfg(target_pointer_width = "32")]
     let data = fs::read("dll_to_inject\\debug_dll.dll").unwrap();
+
+    #[cfg(target_pointer_width = "64")]
+    let data = fs::read("dll_to_inject\\reflective_dll.x64.dll").unwrap();
+
     let pointer = data.as_ptr();
     println!("Pointer to the beginning of data: {:?}", pointer);
     let void_ptr: *mut c_void = pointer as *mut c_void;
