@@ -181,7 +181,6 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             println!("module_nt_headers_ptr {:x}",module_nt_headers_ptr);
 
             // module_export_dir 
-            // module_export_dir 
             #[cfg(target_pointer_width = "32")]
             let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32; //32bits_spec
 
@@ -236,24 +235,12 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                     // use this functions name ordinal as an index into the array of name pointers
                     let ordinal_value = *(module_AddressOfOrdinals as *const u16) as isize;
                     AddressOfFunctions = (AddressOfFunctions as *const u32).offset(ordinal_value) as *const u32;//32bits_spec - line mode
-
-
-
-
-
                     
-                    #[cfg(target_pointer_width = "32")]
                     println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32)); //32bits_spec - line add
 
-                    #[cfg(target_pointer_width = "64")]
-                    println!("......AddressOfFunctions deref : 0x{:x}", *(AddressOfFunctions as *const u32)); //64bits_spec - line add
 
                     // get function VA
-                    #[cfg(target_pointer_width = "32")]
                     let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize; //32bits_spec - line add
-
-                    #[cfg(target_pointer_width = "64")]
-                    let AddressOfFunctions_VA = module_base_address  as  usize + *(AddressOfFunctions as *const u32) as usize; //64bits_spec - line add
                     
                     // store this functions VA
                     if function_name_hash == LOAD_LIBRARY_A_HASH {
@@ -488,7 +475,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 
     // address of first Import Dir entry
     let first_entry = (new_base_address as *mut u8).add((*directory_import).VirtualAddress as usize);
-    println!("first_entry : {:x}",*(first_entry as *mut usize)); //32bits_spec - line mode
+    println!("first_entry : {:x}",*(first_entry as *mut u32)); //32bits_spec - line mode
                 
     // cast first import dir entry
     let mut first_entry_DESCRIPTOR : *mut IMAGE_IMPORT_DESCRIPTOR = first_entry as *mut IMAGE_IMPORT_DESCRIPTOR; 
@@ -521,7 +508,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
         
         // iterate through all imported functions
         // thunk contains address of the IAT entry containing the function RVA
-        while *(FirstThunk_ptr as *mut usize) != 0 { //32bits_spec - line mode
+        while *(FirstThunk_ptr as *mut u32) != 0 { //32bits_spec - line mode
 
             // Just check if is working
             println!("\nFirstThunk : {:x}",*(FirstThunk_ptr as *mut usize)); // print "Thunk value" //32bits_spec - line mode
@@ -571,11 +558,11 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
                 //array_address = array_address + (IMAGE_ORDINAL((*imagethunkdata).u1.Ordinal) as usize - (*module_image_export_directory).Base as usize* 4) as usize;
                 array_address = array_address + (  ((*imagethunkdata).u1.Ordinal & 0xFFF) as usize - (*module_image_export_directory).Base as usize* 4) as usize;
                 // // patch in the address for this imported function
-                *(FirstThunk_ptr as *mut usize)  = (loaded_module_base as  usize + *(array_address as *mut usize) as  usize) as  usize; //32bits_spec - line mode
+                *(FirstThunk_ptr as *mut u32)  = (loaded_module_base as  usize + *(array_address as *mut u32) as  usize) as  u32; //32bits_spec - line mode
             }
             else {
                 // get the VA of this functions import by name struct
-                let mut function_import_VA = (new_base_address as *mut u8).add((*(FirstThunk_ptr as *mut usize)) as usize); //32bits_spec - line mode
+                let mut function_import_VA = (new_base_address as *mut u8).add((*(FirstThunk_ptr as *mut u32)) as usize); //32bits_spec - line mode
                 println!("function_import_VA : {:p}",function_import_VA);
 
                 // cast function_import_VA to IMAGE_IMPORT_BY_NAME struct

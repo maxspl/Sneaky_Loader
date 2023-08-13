@@ -1,0 +1,1 @@
+C:\Users\Maxime\OneDrive\Documents\git_loader\GoRust_Sneaky_Syringe\RustyLoader\target\release\rusty_inject.dll: C:\Users\Maxime\OneDrive\Documents\git_loader\GoRust_Sneaky_Syringe\RustyLoader\src\lib.rs C:\Users\Maxime\OneDrive\Documents\git_loader\GoRust_Sneaky_Syringe\RustyLoader\src\loader.rs

@@ -11,7 +11,7 @@ fn main() {
     let data = fs::read("dll_to_inject\\debug_dll.dll").unwrap();
 
     #[cfg(target_pointer_width = "64")]
-    let data = fs::read("dll_to_inject\\reflective_dll.x64.dll").unwrap();
+    let data = fs::read("dll_to_inject\\rusty_inject.dll").unwrap();
 
     let pointer = data.as_ptr();
     println!("Pointer to the beginning of data: {:?}", pointer);

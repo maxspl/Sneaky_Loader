@@ -158,7 +158,12 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             let module_nt_headers_ptr = module_base_address as usize + (*module_dos_headers).e_lfanew as  usize;
 
             // module_export_dir 
-            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32;
+            #[cfg(target_pointer_width = "32")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS64 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS64; //32bits_spec - line add
+
             let module_export_dir =  (*module_nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT as usize];
 
             // get the VA of the export directory
@@ -246,7 +251,12 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
             let module_nt_headers_ptr = module_base_address as usize + (*module_dos_headers).e_lfanew as  usize;
 
             // module_export_dir 
-            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32;
+            #[cfg(target_pointer_width = "32")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS32 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let module_nt_headers: *mut IMAGE_NT_HEADERS64 = module_nt_headers_ptr as *mut IMAGE_NT_HEADERS64; //32bits_spec - line add
+
             let module_export_dir =  (*module_nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT as usize];
 
             // get the VA of the export directory
@@ -321,7 +331,12 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
     // get the VA of the NT Header for the PE to be loaded
     let loaded_module_DOS_Headers: *mut IMAGE_DOS_HEADER = loaded_module_base as *mut IMAGE_DOS_HEADER;
     let NT_Headers_address = loaded_module_base as usize + (*loaded_module_DOS_Headers).e_lfanew as usize;
-    let loaded_module_NT_Headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32;
+    
+    #[cfg(target_pointer_width = "32")]
+    let loaded_module_NT_Headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+    #[cfg(target_pointer_width = "64")]
+    let loaded_module_NT_Headers: *mut IMAGE_NT_HEADERS64 = NT_Headers_address as *mut IMAGE_NT_HEADERS64; //64bits_spec - line add
 
 
 	// allocate all the memory for the DLL to be loaded into. we can load at any address because we will  
@@ -421,16 +436,30 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
         while *(FirstThunk_ptr as *mut u32) != 0 {
             
             // sanity check OriginalFirstThunk as some compilers only import by FirstThunk. Will enter the if condition it import by ordinal
-            let mut imagethunkdata : *mut IMAGE_THUNK_DATA32 = OriginalFirstThunk as * mut IMAGE_THUNK_DATA32; 
+            #[cfg(target_pointer_width = "32")]
+            let mut imagethunkdata : *mut IMAGE_THUNK_DATA32 = OriginalFirstThunk as * mut IMAGE_THUNK_DATA32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let mut imagethunkdata : *mut IMAGE_THUNK_DATA64 = OriginalFirstThunk as * mut IMAGE_THUNK_DATA64; //64bits_spec - line add
             
-                        
-            if !OriginalFirstThunk.is_null()  && (IMAGE_ORDINAL_FLAG32 & (*imagethunkdata).u1.Ordinal) != 0{ //IMAGE_ORDINAL_FLAG64 equal to 0x8000000000000000
+            #[cfg(target_pointer_width = "32")]
+            let IMAGE_ORDINAL_X = IMAGE_ORDINAL_FLAG32; //32bits_spec - line add
+
+            #[cfg(target_pointer_width = "64")]
+            let IMAGE_ORDINAL_X = IMAGE_ORDINAL_FLAG64; //64bits_spec - line add
+
+            if !OriginalFirstThunk.is_null()  && (IMAGE_ORDINAL_X & (*imagethunkdata).u1.Ordinal) != 0{ //IMAGE_ORDINAL_FLAG64 equal to 0x8000000000000000
                 
                 // get the VA of the modules NT Header
                 let mut NT_Headers_address = loaded_module_base as usize + (*loaded_module_DOS_Headers).e_lfanew as usize;
             
                 // get the address of the modules export directory entry
-                let mut module_nt_headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32;
+                #[cfg(target_pointer_width = "32")]
+                let mut module_nt_headers: *mut IMAGE_NT_HEADERS32 = NT_Headers_address as *mut IMAGE_NT_HEADERS32; //32bits_spec - line add
+
+                #[cfg(target_pointer_width = "64")]
+                let mut module_nt_headers: *mut IMAGE_NT_HEADERS64 = NT_Headers_address as *mut IMAGE_NT_HEADERS64; //64bits_spec - line add
+
                 let mut export_dir_entry_ptr =  (*module_nt_headers).OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT as usize];
 
                 // get the VA of the export directory
@@ -465,7 +494,7 @@ pub unsafe extern "system" fn ReflectiveLoader(p: *mut c_void) ->   usize {
 
             }
             // get next pointer
-            FirstThunk_ptr = (FirstThunk_ptr as *mut u32).add(1) as *mut usize;
+            FirstThunk_ptr = (FirstThunk_ptr as *mut usize).add(1) as *mut usize;
         }
       
 
