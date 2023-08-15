@@ -1,5 +1,5 @@
 # Sneaky_Loader
-Custom loader - Rust/Go Dll Reflective Injection - Only supports 32bits for the moment
+Custom loader - Rust/Go Dll Reflective Injection - Supports 32/54 bits but not ARM for the moment
 
 # How to use it ?
 
@@ -8,19 +8,30 @@ Custom loader - Rust/Go Dll Reflective Injection - Only supports 32bits for the 
 git clone <repo>
 ```
 
-2. Compile the 32 bits dll
+2. x32 - Compile the 32 bits dll
 ```
 cd RustyLoader
 rustup target add i686-pc-windows-msvc
 cargo build --target=i686-pc-windows-msvc --release
 ```
 
-3. Copy the compiled dll
+2. x64 - Compile the 32 bits dll
+```
+cd RustyLoader
+cargo build --release
+```
+
+3. x32 - Copy the compiled dll
 ```
 Copy-Item .\target\i686-pc-windows-msvc\release\rusty_inject.dll -Destination ..\GogoInjector\
 ```
 
-4. Compile the injector
+3. x64 - Copy the compiled dll
+```
+Copy-Item .\target\release\rusty_inject.dll -Destination ..\GogoInjector\
+```
+
+4. x32 - Compile the injector
 ```
 cd GogoInjector
 go get github.com/Binject/debug/pe
@@ -29,11 +40,28 @@ $env:GOARCH="386"
 go build .\inject.go
 ```
 
+4. x64 - Compile the injector
+```
+cd GogoInjector
+go get github.com/Binject/debug/pe
+go get golang.org/x/sys/windows
+$env:GOARCH="amd64"
+go build .\inject.go
+```
+
 5. Test it
 
-Spawn a 32 bit process and git its pid :
+x32 : 
+Spawn a 32 bits process and get its pid :
 ```
 $process = Start-Process -FilePath "C:\Windows\SysWOW64\cmd.exe" -PassThru
+$process.Id
+```
+
+x64 : 
+Spawn a 64 bits process and get its pid :
+```
+$process = Start-Process -FilePath "C:\Windows\System32\cmd.exe" -PassThru
 $process.Id
 ```
 

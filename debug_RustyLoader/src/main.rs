@@ -8,7 +8,7 @@ fn main() {
 
     loader::hello_from_lib();
     #[cfg(target_pointer_width = "32")]
-    let data = fs::read("dll_to_inject\\debug_dll.dll").unwrap();
+    let data = fs::read("dll_to_inject\\rusty_inject_32.dll").unwrap();
 
     #[cfg(target_pointer_width = "64")]
     let data = fs::read("dll_to_inject\\rusty_inject.dll").unwrap();

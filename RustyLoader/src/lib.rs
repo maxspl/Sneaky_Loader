@@ -25,7 +25,7 @@ pub unsafe extern "system" fn _DllMainCRTStartup(
         // VirtualFree(_reserved as _, 0, MEM_RELEASE);
         MessageBoxA(
             0 as _,
-            "Touran toute neuve has been injected (x64) !\0".as_ptr() as _,
+            "Touran toute neuve has been injected (x32) !\0".as_ptr() as _,
             "Vroom vroom\0".as_ptr() as _,
             0x0,
         );
