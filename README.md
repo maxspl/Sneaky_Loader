@@ -97,12 +97,12 @@ RustyLoader/
 |-- c_code.c
 ```
 
-- Compile as object file :
+- Compile as object file (NOT useful if using build.rs specified later. Cf https://doc.rust-lang.org/cargo/reference/build-scripts.html) :
 ```
 gcc -c c_code.c -o target/release/c_code.o
 ```
 
-- Compile as static library :
+- Compile as static library (NOT useful if using build.rs specified later) :
 ```
 ar rcs target/release/libcdll.a target/release/c_code.o
 ```
