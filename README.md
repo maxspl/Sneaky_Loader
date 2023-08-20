@@ -85,7 +85,7 @@ Example
 ![Alt text](/assets/injected2.png)
 
 
-6. Inject C program
+6. Inject C program : from .c file 
 
 - Add your C code in RustyLoader :
 ```
@@ -95,16 +95,6 @@ RustyLoader/
     |-- lib.rs
     |-- loader.rs
 |-- c_code.c
-```
-
-- Compile as object file (NOT useful if using build.rs specified later. Cf https://doc.rust-lang.org/cargo/reference/build-scripts.html) :
-```
-gcc -c c_code.c -o target/release/c_code.o
-```
-
-- Compile as static library (NOT useful if using build.rs specified later) :
-```
-ar rcs target/release/libcdll.a target/release/c_code.o
 ```
 
 - Modify Cargo.toml
@@ -143,6 +133,72 @@ fn main() {
 
 ```
 extern crate winapi;
+extern "C" {
+    fn show_message();
+}
+```
+
+```
+if call_reason == DLL_PROCESS_ATTACH {
+main_function_from_c_code()
+}
+```
+
+6. Inject C program : from static library
+
+- Compile c code as object file :
+```
+gcc -c c_code.c -o c_code.o
+```
+
+- Compile as static library  :
+```
+ar rcs staticlib.lib c_code.o 
+```
+
+- Add your static library to libs/ :
+```
+RustyLoader/
+|-- Cargo.toml
+|-- libs/
+    |-- staticlib.lib
+|-- src/
+    |-- lib.rs
+    |-- loader.rs
+```
+
+- Modify Cargo.toml
+```
+[package]
+build = "build.rs"
+```
+
+- Create a build.rs file in RustyLoader :
+```
+RustyLoader/
+|-- Cargo.toml
+|-- libs/
+    |-- staticlib.lib
+|-- src/
+    |-- lib.rs
+    |-- loader.rs
+|-- build.rs
+```
+
+Content :
+```
+fn main() {
+    // Tell Cargo where to find the static library
+    println!("cargo:rustc-link-search=./libs");
+
+    // Tell Cargo to link our static library
+    println!("cargo:rustc-link-lib=static=staticlib");
+}
+
+```
+- Modify lib.rs :
+
+```
 extern "C" {
     fn show_message();
 }
