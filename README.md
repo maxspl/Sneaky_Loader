@@ -84,6 +84,76 @@ Example
 ```
 ![Alt text](/assets/injected2.png)
 
+
+6. Inject C program
+
+- Add your C code in RustyLoader :
+```
+RustyLoader/
+|-- Cargo.toml
+|-- src/
+    |-- lib.rs
+    |-- loader.rs
+|-- c_code.c
+```
+
+- Compile as object file :
+```
+gcc -c c_code.c -o target/release/c_code.o
+```
+
+- Compile as static library :
+```
+ar rcs target/release/libcdll.a target/release/c_code.o
+```
+
+- Modify Cargo.toml
+```
+[dependencies]
+ntapi = "0.4.0"
+winapi = { version = "0.3", features = ["winuser"] }
+
+[build-dependencies]
+cc = "1.0"
+
+[build]
+rustc-flags = "-L native=target/release/ -l static:cdll"
+```
+
+- Create a build.rs file in RustyLoader :
+```
+RustyLoader/
+|-- Cargo.toml
+|-- src/
+    |-- lib.rs
+    |-- loader.rs
+|-- c_code.c
+|-- build.rs
+```
+
+Content :
+```
+fn main() {
+    cc::Build::new()
+        .file("c_code.c")
+        .compile("cdll");
+}
+```
+- Modify lib.rs :
+
+```
+extern crate winapi;
+extern "C" {
+    fn show_message();
+}
+```
+
+```
+if call_reason == DLL_PROCESS_ATTACH {
+main_function_from_c_code()
+}
+```
+
 # How to use the debug version ?
 
 The directory debug_RustyLoader contains a verbose version of the RustyLoader. 
