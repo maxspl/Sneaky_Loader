@@ -31,6 +31,14 @@ Copy-Item .\target\i686-pc-windows-msvc\release\rusty_inject.dll -Destination ..
 Copy-Item .\target\release\rusty_inject.dll -Destination ..\GogoInjector\
 ```
 
+Optional - xor the dll to avoid static detection on memory inspection after the dll download. 
+
+```
+inject.go -encode "rusty_inject.dll"
+```
+
+A .enc version of the dll is produced. No need to specify to the injector that it is encoded, it will detect it by itself.
+
 4. x32 - Compile the injector
 ```
 cd GogoInjector

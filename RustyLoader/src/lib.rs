@@ -23,9 +23,14 @@ pub unsafe extern "system" fn _DllMainCRTStartup(
     if call_reason == DLL_PROCESS_ATTACH {
         // Cleanup RWX region
         // VirtualFree(_reserved as _, 0, MEM_RELEASE);
+        #[cfg(target_pointer_width = "32")]
+        let message = "Touran toute neuve has been injected (x32) !\0";
+
+        #[cfg(target_pointer_width = "64")]
+        let message = "Touran toute neuve has been injected (x64) !\0";
         MessageBoxA(
             0 as _,
-            "Touran toute neuve has been injected (x32) !\0".as_ptr() as _,
+            message.as_ptr() as _,
             "Vroom vroom\0".as_ptr() as _,
             0x0,
         );

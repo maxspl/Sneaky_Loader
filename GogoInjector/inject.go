@@ -1,6 +1,7 @@
 package main
 
 import (
+	"GogoInjector/encode"
 	"GogoInjector/inject"
 	"flag"
 	"fmt"
@@ -16,6 +17,7 @@ func main() {
 	pidPtr := flag.Int("pid", 0, "Process ID")
 	localPtr := flag.String("local", "", "Local file path")
 	urlPtr := flag.String("url", "", "URL of the file")
+	encodeptr := flag.String("encode", "", "path of the dll to encode")
 
 	// Parse the command-line options.
 	flag.Parse()
@@ -24,10 +26,15 @@ func main() {
 	pid := *pidPtr
 	local := *localPtr
 	url := *urlPtr
+	encode_path := *encodeptr
 	dwPID := *(*uint32)(unsafe.Pointer(&pid))
-	fmt.Printf("dwPID :%v\n", dwPID)
 
-	if pid == 0 {
+	if encode_path != "" {
+		encode.Encode(encode_path)
+		os.Exit(1)
+	}
+	fmt.Printf("dwPID :%v\n", dwPID)
+	if pid == 0 && encode_path == "" {
 		// Check if PID is provided
 		fmt.Println("PID is required.")
 		os.Exit(1)
@@ -42,6 +49,11 @@ func main() {
 	if local == "" && url == "" {
 		// If neither local nor url are provided
 		fmt.Println("Please provide either local file path or url.")
+		os.Exit(1)
+	}
+
+	if (local != "" || url != "") && pid != 0 && encode_path != "" {
+		fmt.Println("Encode is set. Use it to encore the dll before loading it.")
 		os.Exit(1)
 	}
 

