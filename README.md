@@ -78,6 +78,8 @@ Inject the dll :
 Usage :
 ```
 .\inject.exe 
+  -encode string
+        path of the dll to encode
   -local string
         Local file path
   -pid int
