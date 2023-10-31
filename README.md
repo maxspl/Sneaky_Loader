@@ -1,5 +1,5 @@
 # Sneaky_Loader
-Custom loader - Rust/Go Dll Reflective Injection - Supports 32/54 bits but not ARM for the moment
+Custom loader - Rust/Go Dll Reflective Injection - Supports 32/64 bits but not ARM for the moment
 
 # How to use it ?
 
@@ -15,7 +15,7 @@ rustup target add i686-pc-windows-msvc
 cargo build --target=i686-pc-windows-msvc --release
 ```
 
-2. x64 - Compile the 32 bits dll
+2. x64 - Compile the 64 bits dll
 ```
 cd RustyLoader
 cargo build --release
