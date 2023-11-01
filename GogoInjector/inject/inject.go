@@ -89,6 +89,7 @@ func Mainfunc(PID uint32, dll_location string, loading_type string) error {
 		fmt.Println("\n------ 1. Open dll to inject from url")
 
 		resp, err := http.Get(dll_location)
+		fmt.Println("\n------ 1. Open dll to inject from url")
 		if err != nil {
 			fmt.Println("Could not open dll to inject")
 			return err
