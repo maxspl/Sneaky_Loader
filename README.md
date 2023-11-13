@@ -236,3 +236,8 @@ cd debug_RustyLoader
 cargo run --target=i686-pc-windows-msvc
 ```
 ![Alt text](/assets/injected_verbose.png)
+
+# References
+    - https://github.com/stephenfewer/ReflectiveDLLInjection
+    - https://github.com/memN0ps/arsenal-rs/tree/main/rdi-rs
+    - https://github.com/C-Sto/BananaPhone/tree/master

