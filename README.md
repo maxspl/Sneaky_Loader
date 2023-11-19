@@ -84,6 +84,7 @@ Usage :
         Local file path
   -pid int
         Process ID
+  -s    direct syscall flag (only for 64 bits process)
   -url string
         URL of the file
 ```
@@ -94,6 +95,10 @@ Example
 ```
 ![Alt text](/assets/injected2.png)
 
+NOTE : direct syscall is supported on 64 bits. Use -s flag. Direct syscalls are resolved from an encoded SSN json database generated with https://github.com/maxspl/SSN_db
+```
+.\inject.exe -pid  21108 -url http://127.0.0.1:8080/rusty_inject.dll
+```
 
 6. Inject C program : from .c file 
 

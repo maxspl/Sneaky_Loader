@@ -1,5 +1,7 @@
 github.com/Binject/debug v0.0.0-20211007083345-9605c99179ee h1:neBp9wDYVY4Uu1gGlrL+IL4JeZslz+hGEAjBXGAPWak=
 github.com/Binject/debug v0.0.0-20211007083345-9605c99179ee/go.mod h1:QzgxDLY/qdKlvnbnb65eqTedhvQPbaSP2NqIbcuKvsQ=
+github.com/buger/jsonparser v1.1.1 h1:2PnMjfWD7wBILjqQbt530v576A/cAbQvEW9gGIpYMUs=
+github.com/buger/jsonparser v1.1.1/go.mod h1:6RYKKt7H4d4+iWqouImQ9R2FZql3VbhNgx27UK13J/0=
 github.com/edsrzf/mmap-go v1.1.0 h1:6EUwBLQ/Mcr1EYLE4Tn1VdW1A4ckqCQWZBw8Hr0kjpQ=
 github.com/edsrzf/mmap-go v1.1.0/go.mod h1:19H/e8pUPLicwkyNgOykDXkJ9F0MHE+Z52B8EIth78Q=
 github.com/mitchellh/go-ps v1.0.0 h1:i6ampVEEF4wQFF+bkYfwYgY+F/uYJDktmvLPf7qIgjc=

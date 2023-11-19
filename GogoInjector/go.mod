@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/Binject/debug v0.0.0-20211007083345-9605c99179ee // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/edsrzf/mmap-go v1.1.0 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/saferwall/pe v1.4.0 // indirect

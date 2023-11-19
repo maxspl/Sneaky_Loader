@@ -42,7 +42,7 @@ func Decode_dll(dll_content []byte) ([]byte, error) {
 
 }
 
-func Mainfunc(PID uint32, dll_location string, loading_type string) error {
+func Mainfunc(PID uint32, dll_location string, loading_type string, call_mode string) error {
 	var dll_content []byte
 	var lpBuffer uintptr
 	var dwLength uint32
@@ -128,7 +128,7 @@ func Mainfunc(PID uint32, dll_location string, loading_type string) error {
 
 	// 5. Load library remote
 	fmt.Println("\n------ 5. Load library remote")
-	LoadRemoteLibraryR(hProcess, lpBuffer, dwLength)
+	LoadRemoteLibraryR(hProcess, lpBuffer, dwLength, call_mode)
 
 	return nil
 }
