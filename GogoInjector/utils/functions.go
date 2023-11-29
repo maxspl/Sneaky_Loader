@@ -7,7 +7,9 @@ import (
 	"syscall"
 	"unsafe"
 
+	"github.com/Binject/debug/pe"
 	"github.com/buger/jsonparser"
+	"golang.org/x/sys/windows"
 )
 
 func FromUtils() {
@@ -28,6 +30,17 @@ func Syscall(callid uint16, argh ...uintptr) (errcode uint32, err error) {
 
 	if errcode != 0 {
 		err = fmt.Errorf("non-zero return from syscall")
+	}
+	return errcode, err
+}
+
+//go:noescape
+func execIndirectSyscall(callid uint16, trampoline uintptr, argh ...uintptr) (errcode uint32)
+func IndirectSyscall(callid uint16, trampoline uintptr, argh ...uintptr) (errcode uint32, err error) {
+	errcode = execIndirectSyscall(callid, trampoline, argh...)
+
+	if errcode != 0 {
+		err = fmt.Errorf("non-zero return from indirect syscall")
 	}
 	return errcode, err
 }
@@ -146,4 +159,207 @@ func Retrieve_OS_build() int {
 	}
 	return int(osvi.DwBuildNumber)
 
+}
+
+//go:noescape
+func GetPEB() uintptr
+
+func ParseNTDLL() uintptr {
+
+	pPeb := GetPEB()
+	fmt.Printf("PEB address : 0x%x\n", pPeb)
+
+	PEB_struct := (*windows.PEB)(unsafe.Pointer(pPeb))
+	//fmt.Printf("PEB_struct  : 0x%x\n", PEB_struct.Ldr)
+
+	pLdr := (*PebLdrData)(unsafe.Pointer(PEB_struct.Ldr))
+	fmt.Printf("PEB_LDR_DATA_struct address : 0x%p\n", pLdr)
+
+	module_list := (*LdrDataTableEntry)(unsafe.Pointer(pLdr.InLoadOrderModuleList.Flink))
+	currentModuleList := module_list //the list we incremented in the next for loop
+
+	current_module_name_ptr := unsafe.Pointer(currentModuleList.BaseDllName.Buffer)                                          //grab the pbuffer of the first module
+	module_name_length := uint16(currentModuleList.BaseDllName.Length)                                                       //grab the lenght of the name of the first module
+	current_module_name, err := GrabStringFromPtrUTF16(uintptr(unsafe.Pointer(current_module_name_ptr)), module_name_length) //returns the module name from the pointer to the buffer
+	if err != nil {
+		fmt.Println("Error while calling GrabStringFromPtr.")
+	}
+	fmt.Printf("First module should be the program itself : %v\n", current_module_name)
+
+	// nextModuleList := (*LdrDataTableEntry)(unsafe.Pointer(currentModuleList.InLoadOrderLinks.Flink))
+	// fmt.Printf("currentModuleList : %p\n", nextModuleList)
+	var ntdll_base uintptr
+	ntdll_found := false
+	for !ntdll_found {
+		currentModuleList = (*LdrDataTableEntry)(unsafe.Pointer(currentModuleList.InLoadOrderLinks.Flink))                      //We grab the next module as Flink is a pointer to the next item
+		current_module_name_ptr = unsafe.Pointer(currentModuleList.BaseDllName.Buffer)                                          //Buffer contains the dll name
+		module_name_length = uint16(currentModuleList.BaseDllName.Length)                                                       //Length contains utf16 dll name length
+		current_module_name, err = GrabStringFromPtrUTF16(uintptr(unsafe.Pointer(current_module_name_ptr)), module_name_length) //returns the module name from the pointer to the buffer
+		if err != nil {
+			fmt.Println("Error while calling GrabStringFromPtr.")
+		}
+
+		if current_module_name == "ntdll.dll" {
+			ntdll_found = true
+			fmt.Println("ntdll_found : ", current_module_name)
+
+		}
+	}
+
+	// get module base
+	ntdll_base = uintptr(unsafe.Pointer(currentModuleList.DllBase))
+	fmt.Printf("ntdll_base : %x\n", ntdll_base)
+
+	// get the VA of the modules NT Header
+	ntdll_dos_headers := (*pe.DosHeader)(unsafe.Pointer(ntdll_base))
+	ntdll_nt_headers_ptr := ntdll_base + uintptr(ntdll_dos_headers.AddressOfNewExeHeader)
+
+	// nt_headers
+	ntdll_nt_headers := (*IMAGE_NT_HEADERS64)(unsafe.Pointer(ntdll_nt_headers_ptr))
+
+	// optional headers
+	ntdll_optional_headers := (*pe.OptionalHeader64)(unsafe.Pointer(&ntdll_nt_headers.IMAGE_OPTIONAL_HEADER64))
+
+	// export directory
+	IMAGE_DIRECTORY_ENTRY_EXPORT := 0
+	ntdll_export_directory := ntdll_optional_headers.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT]
+
+	// get the VA of the export directory
+	ntdll_export_directory_va := ntdll_base + uintptr(ntdll_export_directory.VirtualAddress)
+
+	// get the VA for the array of name pointers
+	ntdll_image_export_directory := (*IMAGE_EXPORT_DIRECTORY)(unsafe.Pointer(ntdll_export_directory_va))
+	ntdll_AddressOfNames := ntdll_base + uintptr(ntdll_image_export_directory.AddressOfNames)
+	ntdll_AddressOfOrdinals := ntdll_base + uintptr(ntdll_image_export_directory.AddressOfNameOrdinals)
+	fmt.Printf("ntdll_AddressOfNames : %x\n", ntdll_AddressOfNames)
+	fmt.Printf("ntdll_AddressOfOrdinals: %x\n", ntdll_AddressOfOrdinals)
+
+	continue_v := true
+	for continue_v {
+		ntdll_AddressOfNames_dereferenced := *(*uint32)(unsafe.Pointer(ntdll_AddressOfNames))
+
+		ntdll_function_name_ptr := ntdll_base + uintptr(ntdll_AddressOfNames_dereferenced)
+		//fmt.Printf("ntdll_AddressOfNames_dereferenced : %x\n", ntdll_function_name_ptr)
+		ntdll_function_name, err := GrabStringFromPtr(ntdll_function_name_ptr)
+		if err != nil {
+			fmt.Println("Error while GrabStringFromPtr")
+		}
+		//fmt.Printf("ntdll_AddressOfNames_dereferenced : %v\n", ntdll_function_name)
+
+		//time.Sleep(1000 * time.Second)
+
+		//NtSetEventBoostPriority
+		if ntdll_function_name == "NtSetEventBoostPriority" {
+			fmt.Printf("found reference function : %v\n", ntdll_function_name)
+			continue_v = false
+
+			// get the VA for the array of addresses
+			AddressOfFunctions_VA := ntdll_base + uintptr(ntdll_image_export_directory.AddressOfFunctions)
+			fmt.Printf("AddressOfFunctions_VA : %x\n", AddressOfFunctions_VA)
+			fmt.Printf("AddressOfFunctions_VA deref : %x\n", *(*uint32)(unsafe.Pointer(AddressOfFunctions_VA)))
+
+			//derefence ordinal
+			ordinal_value_dereferenced := *(*uint16)(unsafe.Pointer(ntdll_AddressOfOrdinals))
+			fmt.Printf("ordinal_value_dereferenced : %x\n", ordinal_value_dereferenced)
+
+			//use ordinal to get the functions AddressOfFunctions_VA
+			AddressOfFunctions_VA += uintptr(uint16(ordinal_value_dereferenced * 4)) // * 4 bytes
+			fmt.Printf("AddressOfFunctions_VA : %x\n", AddressOfFunctions_VA)
+			AddressOfFunctions_VA_deref := *(*uint32)(unsafe.Pointer(AddressOfFunctions_VA))
+			fmt.Printf("AddressOfFunctions_VA deref : %x\n", AddressOfFunctions_VA_deref)
+
+			// get function VA
+			function_VA := ntdll_base + uintptr(AddressOfFunctions_VA_deref)
+			fmt.Printf("function_VA : %x\n", function_VA)
+
+			// get syscall instruction address
+			syscall_VA := function_VA + uintptr(18) //syscall is 18 bytes after
+			fmt.Printf("syscall_VA : %x\n", syscall_VA)
+			return syscall_VA
+			//time.Sleep(1000 * time.Second)
+
+		}
+		ntdll_AddressOfNames += 4
+		ntdll_AddressOfOrdinals += 2
+	}
+
+	// time.Sleep(1000 * time.Second)
+	return 0x0
+}
+
+type PebLdrData struct {
+	Length                          uint32
+	Initialized                     byte
+	SsHandle                        uintptr
+	InLoadOrderModuleList           windows.LIST_ENTRY
+	InMemoryOrderModuleList         windows.LIST_ENTRY
+	InInitializationOrderModuleList windows.LIST_ENTRY
+	EntryInProgress                 unsafe.Pointer
+	ShutdownInProgress              byte
+	ShutdownThreadId                uintptr
+}
+
+type LdrDataTableEntry struct { //from https://pkg.go.dev/github.com/byronzhu-haha/BananaPhone/pkg/BananaPhone
+	InLoadOrderLinks           windows.LIST_ENTRY
+	InMemoryOrderLinks         windows.LIST_ENTRY
+	InInitializationOrderLinks windows.LIST_ENTRY
+	DllBase                    *uintptr
+	EntryPoint                 *uintptr
+	SizeOfImage                *uintptr
+	FullDllName                windows.NTUnicodeString
+	BaseDllName                windows.NTUnicodeString
+	Flags                      uint32
+	LoadCount                  uint16
+	TlsIndex                   uint16
+	HashLinks                  windows.LIST_ENTRY
+	TimeDateStamp              uint64
+}
+
+type IMAGE_NT_HEADERS64 struct {
+	Signature               uint32
+	IMAGE_FILE_HEADER       pe.FileHeader
+	IMAGE_OPTIONAL_HEADER64 pe.OptionalHeader64
+}
+
+type IMAGE_EXPORT_DIRECTORY struct { //from https://github.com/golang/go/blob/841e63e480ca2626e0cd0bbf8df31f8c6d8ee597/src/cmd/link/internal/ld/pe.go#L32
+	Characteristics       uint32
+	TimeDateStamp         uint32
+	MajorVersion          uint16
+	MinorVersion          uint16
+	Name                  uint32
+	Base                  uint32
+	NumberOfFunctions     uint32
+	NumberOfNames         uint32
+	AddressOfFunctions    uint32
+	AddressOfNames        uint32
+	AddressOfNameOrdinals uint32
+}
+
+func GrabStringFromPtrUTF16(ptr uintptr, length uint16) (string, error) {
+	extracted_string := make([]byte, 2)
+	char := *(*byte)(unsafe.Pointer(ptr))
+	counter := uint16(0)
+	//fmt.Println("next_char :", next_char)
+	for counter != length {
+		char = *(*byte)(unsafe.Pointer(ptr + uintptr(counter)))
+		if counter%2 == 0 { // UTF16 so we take 1/2 char
+			extracted_string = append(extracted_string, char)
+		}
+		counter++
+	}
+	return string(extracted_string[2:]), nil // two first bytes are null, so we remove them
+}
+
+func GrabStringFromPtr(ptr uintptr) (string, error) {
+	extracted_string := make([]byte, 2)
+	char := *(*byte)(unsafe.Pointer(ptr))
+	next_char := *(*byte)(unsafe.Pointer(ptr)) // Dirty way to stop just before getting the null byte of the end
+	index := 0
+	for next_char != 0 {
+		char = *(*byte)(unsafe.Pointer(ptr + uintptr(index)))
+		extracted_string = append(extracted_string, char)
+		index++
+		next_char = *(*byte)(unsafe.Pointer(ptr + uintptr(index)))
+	}
+	return string(extracted_string[2:]), nil // two first bytes are null, so we remove them
 }

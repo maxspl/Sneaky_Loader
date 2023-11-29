@@ -3,7 +3,6 @@ package main
 import (
 	"GogoInjector/encode"
 	"GogoInjector/inject"
-	"GogoInjector/utils"
 	"flag"
 	"fmt"
 	"os"
@@ -20,6 +19,7 @@ func param_exec() {
 	urlPtr := flag.String("url", "", "URL of the file")
 	encodeptr := flag.String("encode", "", "path of the dll to encode")
 	directSyscallFlag := flag.Bool("s", false, "direct syscall flag (only for 64 bits process)")
+	indirectSyscallFlag := flag.Bool("i", false, "indirect syscall flag (only for 64 bits process)")
 
 	// Parse the command-line options.
 	flag.Parse()
@@ -70,7 +70,14 @@ func param_exec() {
 		fmt.Println("Direct syscall is set.")
 		call_mode = "direct"
 	}
-
+	if *indirectSyscallFlag {
+		if runtime.GOARCH == "386" {
+			fmt.Println("Indirect syscall is set but runtime is x86, direct syscalls only works on 64 bits process.Exiting..")
+			return
+		}
+		fmt.Println("Indirect syscall is set.")
+		call_mode = "indirect"
+	}
 	fmt.Println("PID:", pid)
 
 	if local != "" {
@@ -113,7 +120,7 @@ func no_param_exec() {
 }
 func main() {
 	//no_param_exec() // uncomment if to use embeded arguments
-	utils.Retrieve_OS_build()
 	param_exec() // comment if previous line is used
+	//utils.ParseNTDLL()
 
 }
